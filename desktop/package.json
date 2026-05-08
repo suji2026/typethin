@@ -1,0 +1,21 @@
+{
+  "name": "voice-input",
+  "version": "1.0.0",
+  "description": "Use phone as voice input for desktop",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.0",
+    "clipboardy": "^5.3.1",
+    "electron": "^33.0.0",
+    "express": "^4.21.0",
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

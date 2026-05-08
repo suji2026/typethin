@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>语音输入</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      height: 100dvh;
+      padding: 16px;
+    }
+    .status-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 0;
+      font-size: 14px;
+      color: #aaa;
+    }
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot.disconnected { background: #ff4444; }
+    .dot.connecting  { background: #ffaa00; animation: pulse 1s infinite; }
+    .dot.connected   { background: #44ff44; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.3; }
+    }
+    textarea {
+      flex: 1; width: 100%;
+      background: #16213e;
+      color: #eee;
+      border: 2px solid #0f3460;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 18px;
+      line-height: 1.6;
+      resize: none;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    textarea:focus {
+      border-color: #e94560;
+    }
+    textarea::placeholder {
+      color: #555;
+    }
+    .hint {
+      text-align: center;
+      color: #555;
+      font-size: 12px;
+      padding: 12px 0 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="status-bar">
+    <div class="dot disconnected" id="dot"></div>
+    <span id="statusText">未连接</span>
+  </div>
+
+  <textarea id="input"
+    placeholder="点击此处，切换到语音输入法开始说话..."
+    autofocus></textarea>
+
+  <p class="hint">说完后文字自动发送到电脑</p>
+
+  <script>
+    (function() {
+      var dot = document.getElementById('dot');
+      var statusText = document.getElementById('statusText');
+      var textarea = document.getElementById('input');
+      var ws = null;
+      var timer = null;
+      var retries = 0;
+      var MAX_RETRIES = 10;
+
+      function setStatus(state) {
+        dot.className = 'dot ' + state;
+        statusText.textContent = {
+          disconnected: '未连接',
+          connecting: '连接中...',
+          connected: '已连接'
+        }[state];
+      }
+
+      function connect() {
+        if (ws && ws.readyState === WebSocket.OPEN) return;
+        setStatus('connecting');
+
+        var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(protocol + '//' + location.host);
+
+        ws.onopen = function() {
+          setStatus('connected');
+          retries = 0;
+          textarea.focus();
+        };
+
+        ws.onclose = function() {
+          setStatus('disconnected');
+          if (retries < MAX_RETRIES) {
+            var delay = Math.min(1000 * Math.pow(2, retries), 30000);
+            retries++;
+            setTimeout(connect, delay);
+          }
+        };
+
+        ws.onerror = function() {
+          ws.close();
+        };
+
+        ws.onmessage = function(e) {
+          try {
+            var msg = JSON.parse(e.data);
+            if (msg.type === 'ack') {
+              // text delivered, could show brief visual feedback
+            }
+          } catch (ignore) {}
+        };
+      }
+
+      var lastSentText = '';
+      var debounceTimer = null;
+
+      function sendText(text) {
+        if (!text || text === lastSentText) return;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'text', payload: text }));
+          lastSentText = text;
+          // 发送成功后清空输入框
+          textarea.value = '';
+        }
+      }
+
+      // 防抖：等文本稳定 2000ms 后再发送
+      function scheduleSend() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() {
+          sendText(textarea.value.trim());
+        }, 2000);
+      }
+
+      textarea.addEventListener('input', function() {
+        scheduleSend();
+      });
+
+      // keepalive
+      setInterval(function() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 30000);
+
+      connect();
+    })();
+  </script>
+</body>
+</html>

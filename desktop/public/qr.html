@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>扫码连接</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      padding: 24px;
+    }
+    h2 { font-size: 16px; margin-bottom: 16px; color: #ccc; }
+    #qr-img { width: 260px; height: 260px; border-radius: 12px; background: #16213e; }
+    .url {
+      margin-top: 16px; font-size: 13px; color: #888;
+      word-break: break-all; text-align: center;
+      max-width: 280px;
+      user-select: all;
+    }
+    .error { color: #e94560; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h2>📱 手机扫码连接</h2>
+  <img id="qr-img" src="" alt="QR Code">
+  <p class="url" id="url-text"></p>
+  <p class="error" id="error" style="display:none"></p>
+
+  <script>
+    fetch('/api/qr')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        document.getElementById('qr-img').src = data.dataUrl;
+        document.getElementById('url-text').textContent = data.url;
+      })
+      .catch(function(err) {
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = '生成二维码失败: ' + err.message;
+      });
+  </script>
+</body>
+</html>
