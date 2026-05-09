@@ -37,6 +37,30 @@
 - Windows 10+（macOS 下键盘模拟需辅助功能权限）
 - iPhone：开启个人热点中的 USB 网络共享
 
+## 打包绿色版（免安装）
+
+```bash
+cd desktop
+npm install
+npm run dist:portable
+```
+
+打包完成后，`desktop/dist/` 目录下会生成 `TypeThin-1.0.0-portable.exe` 文件，这就是绿色版，双击即可运行。
+
+### 打包命令说明
+
+| 命令 | 说明 |
+|------|------|
+| `npm run pack` | 快速打包到 `dist/` 目录（未压缩） |
+| `npm run dist` | 完整打包（生成安装包） |
+| `npm run dist:portable` | 打包为绿色版（单文件 exe） |
+
+### 绿色版特点
+
+- ✅ 单文件运行，无需安装
+- ✅ 拷贝即用，删除即卸载
+- ✅ 适合分发给他人使用
+
 ## 初始化
 
 ```bash
