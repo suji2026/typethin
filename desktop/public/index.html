@@ -35,7 +35,8 @@
       50%      { opacity: 0.3; }
     }
     textarea {
-      flex: 1; width: 100%;
+      width: 100%;
+      height: 35vh;
       background: #16213e;
       color: #eee;
       border: 2px solid #0f3460;
@@ -53,15 +54,100 @@
     textarea::placeholder {
       color: #555;
     }
+    .bottom-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+      padding: 0 4px;
+    }
+    .send-mode {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: #888;
+    }
+    .send-mode label {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .send-mode input[type="radio"] {
+      accent-color: #e94560;
+    }
+    .action-btns {
+      display: flex;
+      gap: 8px;
+    }
+    .action-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .action-btn.clear {
+      background: #333;
+      color: #aaa;
+    }
+    .action-btn.clear:hover {
+      background: #444;
+    }
+    .action-btn.send {
+      background: #e94560;
+      color: #fff;
+    }
+    .action-btn.send:hover {
+      background: #d63a52;
+    }
+    .action-btn.send:disabled {
+      background: #555;
+      color: #888;
+      cursor: not-allowed;
+    }
     .hint {
       text-align: center;
       color: #555;
       font-size: 12px;
       padding: 12px 0 4px;
     }
+    .refresh-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 50%;
+      background: #0f3460;
+      color: #eee;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .refresh-btn:hover {
+      background: #1a4a7a;
+    }
+    .refresh-btn:active {
+      transform: scale(0.95);
+    }
+    .refresh-btn.refreshing {
+      animation: spin 0.5s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
+  <button class="refresh-btn" id="refreshBtn" title="刷新连接">↻</button>
   <div class="status-bar">
     <div class="dot disconnected" id="dot"></div>
     <span id="statusText">未连接</span>
@@ -71,7 +157,24 @@
     placeholder="点击此处，切换到语音输入法开始说话..."
     autofocus></textarea>
 
-  <p class="hint">说完后文字自动发送到电脑</p>
+  <div class="bottom-bar">
+    <div class="send-mode">
+      <label>
+        <input type="radio" name="sendMode" value="auto" id="autoMode" checked>
+        自动发送
+      </label>
+      <label>
+        <input type="radio" name="sendMode" value="manual" id="manualMode">
+        手动发送
+      </label>
+    </div>
+    <div class="action-btns">
+      <button class="action-btn clear" id="clearBtn">清空</button>
+      <button class="action-btn send" id="sendBtn" disabled>发送</button>
+    </div>
+  </div>
+
+  <p class="hint">文字发送到电脑的剪贴板，自动粘贴到光标处，如果光标未唤起，可手动粘贴</p>
 
   <script>
     (function() {
@@ -130,27 +233,69 @@
 
       var lastSentText = '';
       var debounceTimer = null;
+      var sendMode = 'auto';
+      var manualSendTimer = null;
 
       function sendText(text) {
         if (!text || text === lastSentText) return;
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'text', payload: text }));
           lastSentText = text;
-          // 发送成功后清空输入框
           textarea.value = '';
+          updateSendBtn();
         }
       }
 
-      // 防抖：等文本稳定 2000ms 后再发送
+      function updateSendBtn() {
+        var sendBtn = document.getElementById('sendBtn');
+        var hasText = textarea.value.trim().length > 0;
+        sendBtn.disabled = !hasText;
+      }
+
       function scheduleSend() {
+        if (sendMode !== 'auto') return;
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(function() {
           sendText(textarea.value.trim());
         }, 2000);
       }
 
+      function triggerManualSend() {
+        if (sendMode !== 'manual') return;
+        clearTimeout(manualSendTimer);
+        manualSendTimer = setTimeout(function() {
+          sendText(textarea.value.trim());
+        }, 2000);
+      }
+
       textarea.addEventListener('input', function() {
+        updateSendBtn();
         scheduleSend();
+        triggerManualSend();
+      });
+
+      document.getElementById('autoMode').addEventListener('change', function() {
+        sendMode = 'auto';
+        triggerManualSend();
+      });
+
+      document.getElementById('manualMode').addEventListener('change', function() {
+        sendMode = 'manual';
+        clearTimeout(debounceTimer);
+      });
+
+      document.getElementById('clearBtn').addEventListener('click', function() {
+        textarea.value = '';
+        lastSentText = '';
+        updateSendBtn();
+        clearTimeout(debounceTimer);
+        clearTimeout(manualSendTimer);
+      });
+
+      document.getElementById('sendBtn').addEventListener('click', function() {
+        if (sendMode === 'manual') {
+          sendText(textarea.value.trim());
+        }
       });
 
       // keepalive
@@ -161,6 +306,21 @@
       }, 30000);
 
       connect();
+
+      var refreshBtn = document.getElementById('refreshBtn');
+      refreshBtn.addEventListener('click', function() {
+        refreshBtn.classList.add('refreshing');
+        if (ws) {
+          ws.close();
+        }
+        retries = 0;
+        setTimeout(function() {
+          connect();
+          setTimeout(function() {
+            refreshBtn.classList.remove('refreshing');
+          }, 500);
+        }, 200);
+      });
     })();
   </script>
 </body>

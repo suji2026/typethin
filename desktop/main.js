@@ -7,24 +7,50 @@ let qrWindow = null;
 let serverInfo = null;
 let connected = false;
 let statusInterval = null;
+let currentIconColor = null;
 
-function createTrayIcon() {
+function createTrayIcon(r, g, b) {
   const size = 16;
   const buf = Buffer.alloc(size * size * 4);
+  
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
-      const cx = 7.5, cy = 7.5, r = 6;
-      const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
-      if (dist <= r) {
-        buf[i] = 0xe9;
-        buf[i + 1] = 0x45;
-        buf[i + 2] = 0x60;
+      let isPixelSet = false;
+      
+      // 两个 T 并排，顶部横杠连接，横杠加长
+      // 顶部横杠（连接两个 T）- 加长到两端
+      if (y >= 3 && y <= 5 && x >= 2 && x <= 13) {
+        isPixelSet = true;
+      }
+      // 左侧 T 的竖杠
+      if (x >= 4 && x <= 6 && y >= 3 && y <= 12) {
+        isPixelSet = true;
+      }
+      // 右侧 T 的竖杠
+      if (x >= 9 && x <= 11 && y >= 3 && y <= 12) {
+        isPixelSet = true;
+      }
+      
+      if (isPixelSet) {
+        buf[i] = r;
+        buf[i + 1] = g;
+        buf[i + 2] = b;
         buf[i + 3] = 255;
       }
     }
   }
   return nativeImage.createFromBuffer(buf, { width: size, height: size });
+}
+
+function updateTrayIcon() {
+  if (!tray) return;
+  const iconColor = connected ? { r: 0x4a, g: 0xde, b: 0x80 } : { r: 0x80, g: 0x80, b: 0x80 };
+  if (currentIconColor !== `${iconColor.r},${iconColor.g},${iconColor.b}`) {
+    currentIconColor = `${iconColor.r},${iconColor.g},${iconColor.b}`;
+    const icon = createTrayIcon(iconColor.r, iconColor.g, iconColor.b);
+    tray.setImage(icon);
+  }
 }
 
 function updateMenu() {
@@ -46,7 +72,7 @@ function updateMenu() {
   ]);
 
   tray.setContextMenu(menu);
-  tray.setToolTip(connected ? '语音输入 - 已连接' : '语音输入 - 等待连接');
+  tray.setToolTip(connected ? 'TypeThin - 已连接' : 'TypeThin - 等待连接');
 }
 
 function showQRWindow() {
@@ -57,10 +83,13 @@ function showQRWindow() {
     return;
   }
 
+  const windowIcon = createTrayIcon(0x00, 0x00, 0x00);
+
   qrWindow = new BrowserWindow({
     width: 340,
     height: 420,
-    title: '扫码连接',
+    title: 'TypeThin',
+    icon: windowIcon,
     resizable: false,
     autoHideMenuBar: true,
     webPreferences: { nodeIntegration: false }
@@ -82,7 +111,9 @@ app.whenReady().then(() => {
   });
 
   serverInfo.server.on('listening', () => {
-    const icon = createTrayIcon();
+    connected = false;
+    const icon = createTrayIcon(0x80, 0x80, 0x80);
+    currentIconColor = '128,128,128';
     tray = new Tray(icon);
     updateMenu();
     showQRWindow();
@@ -94,6 +125,7 @@ app.whenReady().then(() => {
       connected = clientCount > 0;
       if (connected !== wasConnected) {
         updateMenu();
+        updateTrayIcon();
       }
     }, 1000);
   });

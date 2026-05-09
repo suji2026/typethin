@@ -7,31 +7,49 @@ const { execSync } = require('child_process');
 const { typeText } = require('./keyboard');
 const QRCode = require('qrcode');
 
-function getLocalIP() {
-  try {
-    // 通过默认路由获取实际在用的网卡 IP
-    const output = execSync('route print 0.0.0.0', { encoding: 'utf8' });
-    const lines = output.split('\n');
-    for (const line of lines) {
-      const match = line.match(/^\s*0\.0\.0\.0\s+0\.0\.0\.0\s+(\S+)\s+(\S+)\s+(\d+)/);
-      if (match && match[1] !== 'On-link') {
-        // match[2] 就是默认路由对应的本地 IP
-        return match[2];
-      }
-    }
-  } catch {
-    // 回退到简单方式
-  }
-
+function getLocalIPs() {
   const interfaces = os.networkInterfaces();
+  const ips = [];
+  const virtualNetworks = [
+    '192.168.137.',  // VirtualBox NAT
+    '192.168.159.',  // VirtualBox Host-Only
+    '192.168.59.',   // Docker
+    '172.17.',       // Docker
+    '172.18.',       // Docker
+    '172.19.',       // Docker
+    '172.20.',       // Docker
+    '172.21.',       // Docker
+  ];
+  
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+        const ip = iface.address;
+        
+        const isVirtualIP = virtualNetworks.some(net => {
+          if (net.endsWith('.')) {
+            return ip.startsWith(net);
+          }
+          return false;
+        });
+        
+        if (isVirtualIP) continue;
+        
+        if (ip.startsWith('192.168.') ||
+            ip.startsWith('172.') || 
+            ip.startsWith('10.')) {
+          ips.push(ip);
+        }
       }
     }
   }
-  return '127.0.0.1';
+  
+  return ips;
+}
+
+function getLocalIP() {
+  const ips = getLocalIPs();
+  return ips.length > 0 ? ips[0] : '127.0.0.1';
 }
 
 function startServer(port = 9527) {
@@ -41,10 +59,18 @@ function startServer(port = 9527) {
 
   app.get('/api/qr', async (_req, res) => {
     try {
-      const ip = getLocalIP();
-      const url = `http://${ip}:${port}`;
+      const ips = getLocalIPs();
+      const mainIP = ips.length > 0 ? ips[0] : '127.0.0.1';
+      const url = `http://${mainIP}:${port}`;
       const dataUrl = await QRCode.toDataURL(url);
-      res.json({ url, dataUrl });
+      const clientCount = [...wss.clients].filter(c => c.readyState === 1).length;
+      res.json({ 
+        url, 
+        dataUrl,
+        connected: clientCount > 0,
+        clientCount,
+        allIPs: ips
+      });
     } catch {
       res.status(500).json({ error: 'QR generation failed' });
     }
@@ -71,8 +97,11 @@ function startServer(port = 9527) {
   });
 
   server.listen(port, () => {
-    const ip = getLocalIP();
-    console.log(`Server: http://${ip}:${port}`);
+    const ips = getLocalIPs();
+    console.log(`Server running on port ${port}`);
+    ips.forEach(ip => {
+      console.log(`  - http://${ip}:${port}`);
+    });
   });
 
   return { server, wss, port };
