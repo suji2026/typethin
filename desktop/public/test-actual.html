@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>发送模式实际测试</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 { color: #333; }
+    .test-panel {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 15px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin: 10px 0;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #007bff; color: white; }
+    .btn-primary:hover { background: #0056b3; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-danger:hover { background: #c82333; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-success:hover { background: #218838; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover { background: #545b62; }
+
+    .mode-selector {
+      display: flex;
+      gap: 20px;
+      padding: 15px;
+      background: #e9ecef;
+      border-radius: 6px;
+      margin: 10px 0;
+    }
+    .mode-selector label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .mode-selector input[type="radio"] {
+      accent-color: #007bff;
+      width: 18px;
+      height: 18px;
+    }
+
+    .input-area {
+      width: 100%;
+      min-height: 120px;
+      padding: 15px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 16px;
+      resize: vertical;
+      font-family: inherit;
+    }
+    .input-area:focus {
+      border-color: #007bff;
+      outline: none;
+    }
+
+    .log-container {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 6px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .log-entry {
+      margin: 4px 0;
+      padding: 2px 0;
+    }
+    .log-time { color: #6a9955; }
+    .log-action { color: #9cdcfe; }
+    .log-result { color: #4ec9b0; }
+    .log-error { color: #f14c4c; }
+    .log-send { color: #dcdcaa; font-weight: bold; }
+
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .status.auto { background: #fff3cd; color: #856404; }
+    .status.manual { background: #d1ecf1; color: #0c5460; }
+    .status.connected { background: #d4edda; color: #155724; }
+    .status.disconnected { background: #f8d7da; color: #721c24; }
+
+    .test-results {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .test-item {
+      padding: 12px;
+      border-radius: 6px;
+      border-left: 4px solid;
+    }
+    .test-item.pass {
+      background: #d4edda;
+      border-color: #28a745;
+    }
+    .test-item.fail {
+      background: #f8d7da;
+      border-color: #dc3545;
+    }
+    .test-item.pending {
+      background: #fff3cd;
+      border-color: #ffc107;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 发送模式实际测试工具</h1>
+
+  <div class="test-panel">
+    <h2>1. 当前状态</h2>
+    <p>
+      发送模式: <span id="currentMode" class="status auto">自动</span>
+      连接状态: <span id="connectionStatus" class="status disconnected">未连接</span>
+    </p>
+
+    <h2>2. 发送模式选择</h2>
+    <div class="mode-selector">
+      <label>
+        <input type="radio" name="sendMode" value="auto" id="autoMode" checked>
+        <span>自动发送模式</span>
+      </label>
+      <label>
+        <input type="radio" name="sendMode" value="manual" id="manualMode">
+        <span>手动发送模式</span>
+      </label>
+    </div>
+
+    <h2>3. 测试输入</h2>
+    <textarea id="testInput" class="input-area" placeholder="在这里输入文字测试..."></textarea>
+
+    <div class="controls">
+      <button class="btn-secondary" onclick="clearLog()">清空日志</button>
+      <button class="btn-danger" onclick="resetTest()">重置测试</button>
+      <button class="btn-success" onclick="runAutoTest()">运行自动测试</button>
+    </div>
+  </div>
+
+  <div class="test-panel">
+    <h2>4. 测试结果</h2>
+    <div id="testResults" class="test-results"></div>
+  </div>
+
+  <div class="test-panel">
+    <h2>5. 操作日志</h2>
+    <div id="logContainer" class="log-container"></div>
+  </div>
+
+  <script>
+    // 测试状态
+    let currentMode = 'auto';
+    let sendCount = 0;
+    let autoSendCount = 0;
+    let manualSendCount = 0;
+    let lastSentText = '';
+
+    // DOM 元素
+    const testInput = document.getElementById('testInput');
+    const autoModeRadio = document.getElementById('autoMode');
+    const manualModeRadio = document.getElementById('manualMode');
+    const currentModeDisplay = document.getElementById('currentMode');
+    const logContainer = document.getElementById('logContainer');
+    const testResultsDiv = document.getElementById('testResults');
+
+    // 日志函数
+    function log(message, type = 'action') {
+      const time = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-${type}">${message}</span>`;
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    function logSend(text, type = 'send') {
+      log(`📤 发送内容: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`, type);
+      sendCount++;
+      if (currentMode === 'auto') autoSendCount++;
+      else manualSendCount++;
+    }
+
+    function clearLog() {
+      logContainer.innerHTML = '';
+      log('日志已清空');
+    }
+
+    function updateModeDisplay() {
+      currentModeDisplay.textContent = currentMode === 'auto' ? '自动' : '手动';
+      currentModeDisplay.className = 'status ' + currentMode;
+      log(`切换到${currentMode === 'auto' ? '自动' : '手动'}模式`);
+    }
+
+    // 模拟 scheduleSend 函数（来自原代码）
+    let debounceTimer = null;
+    function scheduleSend() {
+      if (currentMode !== 'auto') {
+        log('scheduleSend: 当前是手动模式，跳过自动发送', 'result');
+        return;
+      }
+      clearTimeout(debounceTimer);
+      log('scheduleSend: 启动 2 秒定时器...');
+      debounceTimer = setTimeout(function() {
+        const text = testInput.value.trim();
+        if (text && text !== lastSentText) {
+          logSend(text);
+          lastSentText = text;
+        }
+      }, 2000);
+    }
+
+    // 模拟 triggerManualSend 函数（来自原代码）
+    let manualSendTimer = null;
+    function triggerManualSend() {
+      if (currentMode !== 'manual') {
+        log('triggerManualSend: 当前是自动模式，跳过', 'result');
+        return;
+      }
+      clearTimeout(manualSendTimer);
+      log('triggerManualSend: 启动 2 秒定时器...');
+      manualSendTimer = setTimeout(function() {
+        const text = testInput.value.trim();
+        if (text && text !== lastSentText) {
+          logSend(text);
+          lastSentText = text;
+        }
+      }, 2000);
+    }
+
+    // 事件处理
+    autoModeRadio.addEventListener('change', function() {
+      if (this.checked) {
+        currentMode = 'auto';
+        updateModeDisplay();
+        clearTimeout(debounceTimer);
+      }
+    });
+
+    manualModeRadio.addEventListener('change', function() {
+      if (this.checked) {
+        currentMode = 'manual';
+        updateModeDisplay();
+        clearTimeout(debounceTimer);
+      }
+    });
+
+    testInput.addEventListener('input', function() {
+      log(`输入文字: "${this.value.substring(0, 30)}${this.value.length > 30 ? '...' : ''}"`);
+
+      // 这是原代码的行为
+      scheduleSend();
+      // 注意：这里没有调用 triggerManualSend()，因为它已经被移除了
+    });
+
+    // 手动发送按钮
+    function manualSend() {
+      if (currentMode !== 'manual') {
+        log('手动发送: 当前不是手动模式', 'error');
+        return;
+      }
+      const text = testInput.value.trim();
+      if (text && text !== lastSentText) {
+        logSend(text);
+        lastSentText = text;
+      }
+    }
+
+    // 清空按钮
+    function clearInput() {
+      testInput.value = '';
+      lastSentText = '';
+      clearTimeout(debounceTimer);
+      clearTimeout(manualSendTimer);
+      log('已清空输入');
+    }
+
+    function resetTest() {
+      clearInput();
+      autoModeRadio.checked = true;
+      currentMode = 'auto';
+      updateModeDisplay();
+      sendCount = 0;
+      autoSendCount = 0;
+      manualSendCount = 0;
+      testResultsDiv.innerHTML = '';
+      clearLog();
+      log('测试已重置');
+    }
+
+    // 测试用例
+    function addTestResult(name, status, details) {
+      const div = document.createElement('div');
+      div.className = 'test-item ' + status;
+      div.innerHTML = `<strong>${name}</strong><br><small>${details}</small>`;
+      testResultsDiv.appendChild(div);
+    }
+
+    async function runAutoTest() {
+      log('='.repeat(50));
+      log('🚀 开始自动测试', 'action');
+      log('='.repeat(50));
+
+      testResultsDiv.innerHTML = '';
+
+      // 测试 1: 手动模式输入不应该自动发送
+      log('\n--- 测试 1: 手动模式 ---');
+      manualModeRadio.checked = true;
+      currentMode = 'manual';
+      updateModeDisplay();
+      testInput.value = '';
+      lastSentText = '';
+      clearTimeout(debounceTimer);
+      clearTimeout(manualSendTimer);
+
+      testInput.value = '测试手动模式';
+      testInput.dispatchEvent(new Event('input'));
+
+      await new Promise(r => setTimeout(r, 2500));
+
+      const test1Pass = sendCount === 0;
+      addTestResult(
+        '手动模式不应自动发送',
+        test1Pass ? 'pass' : 'fail',
+        test1Pass ? '✓ 正确：没有自动发送' : `✗ 错误：发送了 ${sendCount} 次`
+      );
+      log(test1Pass ? '✅ 测试1通过' : '❌ 测试1失败', test1Pass ? 'result' : 'error');
+
+      // 测试 2: 手动模式点击发送按钮应该发送
+      log('\n--- 测试 2: 手动模式点击发送 ---');
+      manualSend();
+      const test2Pass = sendCount === 1;
+      addTestResult(
+        '手动模式点击发送应发送',
+        test2Pass ? 'pass' : 'fail',
+        test2Pass ? '✓ 正确：已发送' : '✗ 错误：发送失败'
+      );
+      log(test2Pass ? '✅ 测试2通过' : '❌ 测试2失败', test2Pass ? 'result' : 'error');
+
+      // 测试 3: 自动模式应该自动发送
+      log('\n--- 测试 3: 自动模式 ---');
+      autoModeRadio.checked = true;
+      currentMode = 'auto';
+      updateModeDisplay();
+      testInput.value = '';
+      lastSentText = '';
+      clearTimeout(debounceTimer);
+      const countBeforeAuto = sendCount;
+
+      testInput.value = '测试自动模式';
+      testInput.dispatchEvent(new Event('input'));
+
+      await new Promise(r => setTimeout(r, 2500));
+
+      const autoSendHappened = sendCount > countBeforeAuto;
+      addTestResult(
+        '自动模式应自动发送',
+        autoSendHappened ? 'pass' : 'fail',
+        autoSendHappened ? '✓ 正确：已自动发送' : '✗ 错误：未自动发送'
+      );
+      log(autoSendHappened ? '✅ 测试3通过' : '❌ 测试3失败', autoSendHappened ? 'result' : 'error');
+
+      // 测试 4: 切换模式后清除定时器
+      log('\n--- 测试 4: 切换模式清除定时器 ---');
+      autoModeRadio.checked = true;
+      currentMode = 'auto';
+      updateModeDisplay();
+      testInput.value = '';
+      lastSentText = '';
+      clearTimeout(debounceTimer);
+
+      testInput.value = '切换测试';
+      testInput.dispatchEvent(new Event('input'));
+      log('自动模式启动定时器');
+
+      // 立即切换到手动模式
+      manualModeRadio.checked = true;
+      currentMode = 'manual';
+      updateModeDisplay();
+      clearTimeout(debounceTimer);
+      log('切换到手动模式，清除定时器');
+
+      await new Promise(r => setTimeout(r, 2500));
+
+      const test4Pass = sendCount === countBeforeAuto + 1; // 只有之前的自动发送
+      addTestResult(
+        '切换模式应清除定时器',
+        test4Pass ? 'pass' : 'fail',
+        test4Pass ? '✓ 正确：定时器已清除' : '✗ 错误：定时器未清除'
+      );
+      log(test4Pass ? '✅ 测试4通过' : '❌ 测试4失败', test4Pass ? 'result' : 'error');
+
+      log('\n' + '='.repeat(50));
+      log('🏁 测试完成', 'action');
+      log(`总发送次数: ${sendCount} (自动: ${autoSendCount}, 手动: ${manualSendCount})`);
+      log('='.repeat(50));
+    }
+
+    // 初始化
+    log('测试工具已加载');
+    log('请选择发送模式并开始测试');
+  </script>
+</body>
+</html>

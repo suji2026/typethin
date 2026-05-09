@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>调试发送模式问题</title>
+  <style>
+    body {
+      font-family: 'Consolas', monospace;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+    h1 { color: #569cd6; }
+    h2 { color: #4ec9b0; margin-top: 30px; }
+
+    .panel {
+      background: #252526;
+      border: 1px solid #3e3e42;
+      border-radius: 4px;
+      padding: 15px;
+      margin: 10px 0;
+    }
+
+    .code-block {
+      background: #1e1e1e;
+      border: 1px solid #3e3e42;
+      border-radius: 4px;
+      padding: 10px;
+      overflow-x: auto;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .comment { color: #6a9955; }
+    .keyword { color: #569cd6; }
+    .function { color: #dcdcaa; }
+    .string { color: #ce9178; }
+    .number { color: #b5cea8; }
+
+    .test-scenario {
+      background: #2d4a2d;
+      border-left: 4px solid #4ec9b0;
+      padding: 15px;
+      margin: 15px 0;
+    }
+    .test-scenario h3 { margin-top: 0; color: #9cdcfe; }
+    .test-scenario ol { margin: 10px 0; padding-left: 20px; }
+    .test-scenario li { margin: 8px 0; }
+    .expected { color: #4ec9b0; }
+    .actual { color: #f14c4c; }
+
+    button {
+      padding: 10px 20px;
+      background: #0e639c;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 5px;
+    }
+    button:hover { background: #1177bb; }
+
+    .result {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+    }
+    .pass { background: #2d4a2d; border: 1px solid #4ec9b0; }
+    .fail { background: #4a2d2d; border: 1px solid #f14c4c; }
+
+    .highlight-line {
+      background: #264f78;
+      display: block;
+      margin: 0 -10px;
+      padding: 0 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔍 调试：手动发送模式问题</h1>
+
+  <div class="panel">
+    <h2>问题描述</h2>
+    <p>用户报告：<strong>选择手动发送时还是会触发自动发送</strong></p>
+  </div>
+
+  <div class="panel">
+    <h2>代码分析</h2>
+
+    <h3>1. input 事件处理</h3>
+    <div class="code-block">
+<span class="comment">// 第 271-274 行</span>
+textarea.addEventListener(<span class="string">'input'</span>, <span class="keyword">function</span>() {
+  updateSendBtn();
+  <span class="highlight-line">scheduleSend();  <span class="comment">// ✅ 只调用这一个</span></span>
+});
+    </div>
+
+    <h3>2. scheduleSend 函数</h3>
+    <div class="code-block">
+<span class="keyword">function</span> <span class="function">scheduleSend</span>() {
+  <span class="keyword">if</span> (sendMode !== <span class="string">'auto'</span>) <span class="keyword">return</span>;  <span class="comment">// ✅ 手动模式直接返回</span>
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(<span class="keyword">function</span>() {
+    sendText(textarea.value.trim());
+  }, <span class="number">2000</span>);
+}
+    </div>
+
+    <h3>3. sendBtn 点击处理</h3>
+    <div class="code-block">
+document.getElementById(<span class="string">'sendBtn'</span>).addEventListener(<span class="string">'click'</span>, <span class="keyword">function</span>() {
+  <span class="keyword">if</span> (sendMode === <span class="string">'manual'</span>) {  <span class="comment">// ✅ 只有手动模式才发送</span>
+    sendText(textarea.value.trim());
+  }
+});
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>测试场景</h2>
+
+    <div class="test-scenario">
+      <h3>场景 1：先选择手动模式，再输入文字</h3>
+      <ol>
+        <li>选择"手动发送"选项</li>
+        <li>在文本框中输入文字</li>
+        <li>等待 3 秒</li>
+      </ol>
+      <p><span class="expected">预期：不应该自动发送</span></p>
+      <p><span class="actual">实际：请检查浏览器控制台</span></p>
+    </div>
+
+    <div class="test-scenario">
+      <h3>场景 2：先输入文字，再切换到手动模式</h3>
+      <ol>
+        <li>确保是"自动发送"模式</li>
+        <li>在文本框中输入文字</li>
+        <li><strong>立即</strong>切换到"手动发送"模式</li>
+        <li>等待 3 秒</li>
+      </ol>
+      <p><span class="expected">预期：不应该发送（因为已经切换到手动模式）</span></p>
+      <p><span class="actual">实际：如果发送了，说明有问题</span></p>
+    </div>
+
+    <button onclick="runTest1()">运行场景 1 测试</button>
+    <button onclick="runTest2()">运行场景 2 测试</button>
+  </div>
+
+  <div id="results"></div>
+
+  <div class="panel">
+    <h2>可能的问题原因</h2>
+    <ol>
+      <li><strong>浏览器缓存</strong>：用户可能没有刷新页面，看到的是旧代码</li>
+      <li><strong>服务器未重启</strong>：修改的是本地文件，但服务器可能需要重启</li>
+      <li><strong>移动端未刷新</strong>：手机浏览器可能缓存了页面</li>
+    </ol>
+
+    <h3>解决方案</h3>
+    <ol>
+      <li>确保重启了 Electron 服务器</li>
+      <li>在手机上强制刷新页面（通常下拉刷新或长按刷新按钮）</li>
+      <li>清除浏览器缓存</li>
+    </ol>
+  </div>
+
+  <script>
+    // 模拟当前代码的行为
+    let sendMode = 'auto';
+    let debounceTimer = null;
+    let sendCount = 0;
+    let lastSentText = '';
+
+    function sendText(text) {
+      if (!text || text === lastSentText) return;
+      sendCount++;
+      console.log(`📤 sendText 调用 #${sendCount}: "${text}"`);
+      lastSentText = text;
+    }
+
+    function scheduleSend() {
+      console.log('scheduleSend 被调用, 当前模式:', sendMode);
+      if (sendMode !== 'auto') {
+        console.log('  → 跳过，因为是手动模式');
+        return;
+      }
+      console.log('  → 设置 2 秒定时器');
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function() {
+        const textarea = document.getElementById('testInput');
+        console.log('定时器触发，发送文字');
+        sendText(textarea.value.trim());
+      }, 2000);
+    }
+
+    // 测试 1
+    async function runTest1() {
+      const resultDiv = document.getElementById('results');
+      resultDiv.innerHTML = '<h3>场景 1 结果</h3>';
+
+      console.clear();
+      console.log('=== 场景 1 测试开始 ===');
+      sendCount = 0;
+      lastSentText = '';
+
+      // 切换到手动模式
+      sendMode = 'manual';
+      console.log('已切换到手动模式');
+
+      // 输入文字
+      const testInput = document.createElement('input');
+      testInput.type = 'text';
+      testInput.value = '测试手动模式输入';
+      console.log('输入文字:', testInput.value);
+
+      scheduleSend();
+
+      // 等待 3 秒
+      await new Promise(r => setTimeout(r, 3000));
+
+      const passed = sendCount === 0;
+      resultDiv.innerHTML += `
+        <div class="result ${passed ? 'pass' : 'fail'}">
+          <strong>${passed ? '✅ 测试通过' : '❌ 测试失败'}</strong><br>
+          发送次数: ${sendCount} (期望: 0)
+        </div>
+      `;
+
+      console.log(`=== 场景 1 测试结束, 发送次数: ${sendCount} ===`);
+    }
+
+    // 测试 2
+    async function runTest2() {
+      const resultDiv = document.getElementById('results');
+      resultDiv.innerHTML = '<h3>场景 2 结果</h3>';
+
+      console.clear();
+      console.log('=== 场景 2 测试开始 ===');
+      sendCount = 0;
+      lastSentText = '';
+
+      // 确保是自动模式
+      sendMode = 'auto';
+      console.log('当前是自动模式');
+
+      // 输入文字
+      const testInput = { value: '先输入的文字' };
+      console.log('输入文字:', testInput.value);
+
+      // 启动定时器（模拟输入触发）
+      console.log('启动定时器...');
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function() {
+        console.log('定时器触发！');
+        sendText(testInput.value.trim());
+      }, 2000);
+
+      // 立即切换到手动模式
+      await new Promise(r => setTimeout(r, 100)); // 等待 100ms
+      console.log('立即切换到手动模式');
+      sendMode = 'manual';
+      console.log('清除定时器');
+      clearTimeout(debounceTimer);
+
+      // 等待 3 秒
+      console.log('等待 3 秒...');
+      await new Promise(r => setTimeout(r, 3000));
+
+      const passed = sendCount === 0;
+      resultDiv.innerHTML += `
+        <div class="result ${passed ? 'pass' : 'fail'}">
+          <strong>${passed ? '✅ 测试通过' : '❌ 测试失败'}</strong><br>
+          发送次数: ${sendCount} (期望: 0)<br>
+          ${passed ? '定时器已被正确清除' : '定时器未被清除，导致了自动发送'}
+        </div>
+      `;
+
+      console.log(`=== 场景 2 测试结束, 发送次数: ${sendCount} ===`);
+    }
+  </script>
+</body>
+</html>

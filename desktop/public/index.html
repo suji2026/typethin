@@ -36,7 +36,7 @@
     }
     textarea {
       width: 100%;
-      height: 35vh;
+      height: 28vh;
       background: #16213e;
       color: #eee;
       border: 2px solid #0f3460;
@@ -97,22 +97,23 @@
       background: #444;
     }
     .action-btn.send {
-      background: #e94560;
+      background: #2196F3;
       color: #fff;
     }
     .action-btn.send:hover {
-      background: #d63a52;
+      background: #1976D2;
     }
     .action-btn.send:disabled {
       background: #555;
       color: #888;
       cursor: not-allowed;
     }
-    .hint {
-      text-align: center;
+    .tips {
+      text-align: left;
       color: #555;
       font-size: 12px;
       padding: 12px 0 4px;
+      line-height: 1.8;
     }
     .refresh-btn {
       position: absolute;
@@ -122,17 +123,18 @@
       height: 40px;
       border: none;
       border-radius: 50%;
-      background: #0f3460;
-      color: #eee;
+      background: transparent;
+      color: #888;
       font-size: 18px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       transition: all 0.2s;
+      box-shadow: none;
     }
     .refresh-btn:hover {
-      background: #1a4a7a;
+      color: #aaa;
     }
     .refresh-btn:active {
       transform: scale(0.95);
@@ -174,7 +176,11 @@
     </div>
   </div>
 
-  <p class="hint">文字发送到电脑的剪贴板，自动粘贴到光标处，如果光标未唤起，可手动粘贴</p>
+  <div class="tips">
+    <div>①自动发送：输入框内不再新增文字2秒后自动发送</div>
+    <div>②手动发送：点击发送按钮发送</div>
+    <div>③文字发送到电脑的光标处自动粘贴，光标未唤起时可在电脑端剪贴板中查看</div>
+  </div>
 
   <script>
     (function() {
@@ -182,9 +188,11 @@
       var statusText = document.getElementById('statusText');
       var textarea = document.getElementById('input');
       var ws = null;
-      var timer = null;
       var retries = 0;
       var MAX_RETRIES = 10;
+      var lastSentText = '';
+      var autoSendTimer = null;
+      var sendMode = 'auto';
 
       function setStatus(state) {
         dot.className = 'dot ' + state;
@@ -225,16 +233,10 @@
           try {
             var msg = JSON.parse(e.data);
             if (msg.type === 'ack') {
-              // text delivered, could show brief visual feedback
             }
           } catch (ignore) {}
         };
       }
-
-      var lastSentText = '';
-      var debounceTimer = null;
-      var sendMode = 'auto';
-      var manualSendTimer = null;
 
       function sendText(text) {
         if (!text || text === lastSentText) return;
@@ -252,53 +254,48 @@
         sendBtn.disabled = !hasText;
       }
 
-      function scheduleSend() {
-        if (sendMode !== 'auto') return;
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(function() {
-          sendText(textarea.value.trim());
-        }, 2000);
-      }
-
-      function triggerManualSend() {
-        if (sendMode !== 'manual') return;
-        clearTimeout(manualSendTimer);
-        manualSendTimer = setTimeout(function() {
-          sendText(textarea.value.trim());
-        }, 2000);
-      }
-
-      textarea.addEventListener('input', function() {
+      function handleInput() {
         updateSendBtn();
-        scheduleSend();
-        triggerManualSend();
-      });
+        if (sendMode === 'auto') {
+          clearTimeout(autoSendTimer);
+          autoSendTimer = setTimeout(function() {
+            sendText(textarea.value.trim());
+          }, 2000);
+        }
+      }
 
-      document.getElementById('autoMode').addEventListener('change', function() {
-        sendMode = 'auto';
-        triggerManualSend();
-      });
+      function handleModeChange(mode) {
+        sendMode = mode;
+        clearTimeout(autoSendTimer);
+      }
 
-      document.getElementById('manualMode').addEventListener('change', function() {
-        sendMode = 'manual';
-        clearTimeout(debounceTimer);
-      });
-
-      document.getElementById('clearBtn').addEventListener('click', function() {
+      function handleClear() {
         textarea.value = '';
         lastSentText = '';
         updateSendBtn();
-        clearTimeout(debounceTimer);
-        clearTimeout(manualSendTimer);
-      });
+        clearTimeout(autoSendTimer);
+      }
 
-      document.getElementById('sendBtn').addEventListener('click', function() {
+      function handleManualSend() {
         if (sendMode === 'manual') {
           sendText(textarea.value.trim());
         }
+      }
+
+      textarea.addEventListener('input', handleInput);
+
+      document.getElementById('autoMode').addEventListener('change', function() {
+        handleModeChange('auto');
       });
 
-      // keepalive
+      document.getElementById('manualMode').addEventListener('change', function() {
+        handleModeChange('manual');
+      });
+
+      document.getElementById('clearBtn').addEventListener('click', handleClear);
+
+      document.getElementById('sendBtn').addEventListener('click', handleManualSend);
+
       setInterval(function() {
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'ping' }));
