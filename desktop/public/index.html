@@ -162,11 +162,11 @@
   <div class="bottom-bar">
     <div class="send-mode">
       <label>
-        <input type="radio" name="sendMode" value="auto" id="autoMode" checked>
+        <input type="radio" name="sendMode" value="auto" id="autoMode">
         自动发送
       </label>
       <label>
-        <input type="radio" name="sendMode" value="manual" id="manualMode">
+        <input type="radio" name="sendMode" value="manual" id="manualMode" checked>
         手动发送
       </label>
     </div>
@@ -189,10 +189,9 @@
       var textarea = document.getElementById('input');
       var ws = null;
       var retries = 0;
-      var MAX_RETRIES = 10;
       var lastSentText = '';
       var autoSendTimer = null;
-      var sendMode = 'auto';
+      var sendMode = 'manual';
 
       function setStatus(state) {
         dot.className = 'dot ' + state;
@@ -218,11 +217,9 @@
 
         ws.onclose = function() {
           setStatus('disconnected');
-          if (retries < MAX_RETRIES) {
-            var delay = Math.min(1000 * Math.pow(2, retries), 30000);
-            retries++;
-            setTimeout(connect, delay);
-          }
+          var delay = Math.min(1000 * Math.pow(2, Math.min(retries, 5)), 30000);
+          retries++;
+          setTimeout(connect, delay);
         };
 
         ws.onerror = function() {

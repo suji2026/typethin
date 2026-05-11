@@ -103,6 +103,26 @@ function showQRWindow() {
   });
 }
 
+function createTray() {
+  connected = false;
+  const icon = createTrayIcon(0x80, 0x80, 0x80);
+  currentIconColor = '128,128,128';
+  tray = new Tray(icon);
+  updateMenu();
+  showQRWindow();
+
+  statusInterval = setInterval(() => {
+    const wasConnected = connected;
+    const wss = serverInfo.wss;
+    const clientCount = wss ? [...wss.clients].filter(c => c.readyState === 1).length : 0;
+    connected = clientCount > 0;
+    if (connected !== wasConnected) {
+      updateMenu();
+      updateTrayIcon();
+    }
+  }, 1000);
+}
+
 app.whenReady().then(() => {
   serverInfo = startServer(9527);
 
@@ -111,23 +131,7 @@ app.whenReady().then(() => {
   });
 
   serverInfo.server.on('listening', () => {
-    connected = false;
-    const icon = createTrayIcon(0x80, 0x80, 0x80);
-    currentIconColor = '128,128,128';
-    tray = new Tray(icon);
-    updateMenu();
-    showQRWindow();
-
-    statusInterval = setInterval(() => {
-      const wasConnected = connected;
-      const wss = serverInfo.wss;
-      const clientCount = wss ? [...wss.clients].filter(c => c.readyState === 1).length : 0;
-      connected = clientCount > 0;
-      if (connected !== wasConnected) {
-        updateMenu();
-        updateTrayIcon();
-      }
-    }, 1000);
+    setTimeout(createTray, 1000);
   });
 });
 
